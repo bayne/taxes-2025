@@ -524,6 +524,21 @@ def given_salt(tax_context, income_tax, property_tax):
 
 
 @given(
+    parsers.parse(
+        "state and local taxes of ${state_tax:g} state income tax and ${local_tax:g} local income tax and ${property_tax:g} property tax"
+    ),
+    target_fixture="tax_context",
+)
+def given_salt_with_local(tax_context, state_tax, local_tax, property_tax):
+    tax_context.state_local_taxes = StateLocalTaxes(
+        state_income_tax_paid=state_tax,
+        local_income_tax_paid=local_tax,
+        real_property_tax=property_tax,
+    )
+    return tax_context
+
+
+@given(
     parsers.parse("charitable contributions of ${amount:g} cash"),
     target_fixture="tax_context",
 )
