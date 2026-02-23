@@ -1,0 +1,19 @@
+[project]
+name = "taxes-bot"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-bdd>=8.1",
+    "pytest-playwright>=0.7.2",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+bdd_features_base_dir = "tests/features/"
