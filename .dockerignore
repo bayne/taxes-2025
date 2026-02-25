@@ -9,11 +9,8 @@ test-results/
 *.json
 *.xml
 *.htm
-*.lock
-pyproject.toml
 .python-version
 .gitignore
 .dockerignore
 Dockerfile
-uv.lock
 tasks.md
