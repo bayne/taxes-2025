@@ -170,7 +170,7 @@ class TaxHandler(http.server.SimpleHTTPRequestHandler):
 
 def main():
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
-    server = http.server.HTTPServer(("localhost", port), TaxHandler)
+    server = http.server.HTTPServer(("0.0.0.0", port), TaxHandler)
     print(f"Tax Calculator running at http://localhost:{port}")
     try:
         server.serve_forever()
