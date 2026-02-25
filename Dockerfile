@@ -5,11 +5,9 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 WORKDIR /app
 
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
+RUN uv sync
 
-# Copy only what the server needs — no tests, no dev tooling
-COPY models.py calculator.py server.py ./
-COPY static/ static/
+COPY . .
 
 EXPOSE 8000
 

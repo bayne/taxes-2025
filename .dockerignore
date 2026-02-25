@@ -1,9 +1,7 @@
 __pycache__/
 *.py[oc]
-.venv/
 .git/
 .github/
-tests/
 test-results/
 *.md
 *.json
