@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import dataclasses
-from dataclasses import dataclass, field
+import os
+import re
+from dataclasses import asdict, dataclass, field
+from enum import Enum
 from typing import Optional
 
 import pytest
@@ -1175,10 +1178,46 @@ def given_investment_interest(tax_context, amount):
 # ---------------------------------------------------------------------------
 
 
+def _enum_to_str(obj):
+    """Recursively convert Enum values to their name strings."""
+    if isinstance(obj, dict):
+        return {k: _enum_to_str(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_enum_to_str(v) for v in obj]
+    if isinstance(obj, Enum):
+        return obj.name
+    return obj
+
+
+def _save_pdf_artifacts(inp, result, test_name):
+    """Generate filled PDF forms as test artifacts. Skips silently if deps missing."""
+    try:
+        from pdf_filler import determine_required_forms, fill_return
+    except ImportError:
+        return
+
+    blanks_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "forms", "blanks")
+    if not os.path.exists(os.path.join(blanks_dir, "f1040.pdf")):
+        return
+
+    input_dict = _enum_to_str(asdict(inp))
+    output_dict = _enum_to_str(asdict(result))
+
+    # Sanitize test name for use as a directory name
+    safe_name = re.sub(r"[^\w\-]", "_", test_name)
+    artifacts_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "tests", "artifacts", safe_name)
+
+    forms = determine_required_forms(input_dict, output_dict)
+    fill_return(input_dict, output_dict, artifacts_dir, forms)
+
+
 @when("the tax return is calculated", target_fixture="tax_result")
-def when_calculate(tax_context):
+def when_calculate(tax_context, request):
     inp = tax_context.build_input()
     result = calculate(inp)
+
+    _save_pdf_artifacts(inp, result, request.node.name)
+
     return result
 
 

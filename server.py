@@ -31,6 +31,8 @@ class TaxHandler(http.server.SimpleHTTPRequestHandler):
             self._handle_calculate()
         elif self.path == "/api/schema":
             self._handle_schema()
+        elif self.path == "/api/pdf":
+            self._handle_pdf()
         else:
             self.send_error(404)
 
@@ -59,6 +61,81 @@ class TaxHandler(http.server.SimpleHTTPRequestHandler):
             self.send_header("Content-Length", str(len(response)))
             self.end_headers()
             self.wfile.write(response.encode())
+
+        except ValidationError as e:
+            error_response = json.dumps({"errors": [str(e)]})
+            self.send_response(400)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(error_response)))
+            self.end_headers()
+            self.wfile.write(error_response.encode())
+
+        except Exception as e:
+            error_response = json.dumps({"errors": [str(e)]})
+            self.send_response(500)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(error_response)))
+            self.end_headers()
+            self.wfile.write(error_response.encode())
+
+    def _handle_pdf(self):
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length)
+            data = json.loads(body)
+
+            # Optional: caller may request a single form instead of the full ZIP
+            single_form_id = data.pop("_form_id", None)
+
+            _deserialize_enum(data, TaxReturnInput)
+            inp = TaxReturnInput(**data)
+            result = calculate(inp)
+
+            from dataclasses import asdict
+            from enum import Enum
+
+            def _enum_to_str(obj):
+                if isinstance(obj, dict):
+                    return {k: _enum_to_str(v) for k, v in obj.items()}
+                if isinstance(obj, list):
+                    return [_enum_to_str(v) for v in obj]
+                if isinstance(obj, Enum):
+                    return obj.name
+                return obj
+
+            input_dict = _enum_to_str(asdict(inp))
+            output_dict = _enum_to_str(asdict(result))
+
+            if single_form_id:
+                # Return a single PDF inline so the browser can display it
+                from pdf_filler import fill_form
+                pdf_bytes = fill_form(single_form_id, input_dict, output_dict)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/pdf")
+                self.send_header("Content-Disposition", f"inline; filename={single_form_id}_filled.pdf")
+                self.send_header("Content-Length", str(len(pdf_bytes)))
+                self.end_headers()
+                self.wfile.write(pdf_bytes)
+            else:
+                # Return a ZIP of all applicable forms; include the list in a header
+                from pdf_filler import fill_return_zip, determine_required_forms
+                form_ids = determine_required_forms(input_dict, output_dict)
+                zip_bytes = fill_return_zip(input_dict, output_dict, form_ids)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/zip")
+                self.send_header("Content-Disposition", "attachment; filename=tax_return.zip")
+                self.send_header("Content-Length", str(len(zip_bytes)))
+                self.send_header("X-Form-Ids", ",".join(form_ids))
+                self.end_headers()
+                self.wfile.write(zip_bytes)
+
+        except ImportError:
+            error_response = json.dumps({"errors": ["pypdf is required for PDF generation. Install with: uv sync --group pdf"]})
+            self.send_response(501)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(error_response)))
+            self.end_headers()
+            self.wfile.write(error_response.encode())
 
         except ValidationError as e:
             error_response = json.dumps({"errors": [str(e)]})

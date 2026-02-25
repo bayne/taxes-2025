@@ -1,0 +1,352 @@
+{
+  "form_id": "f1040",
+  "tax_year": 2025,
+  "pdf_file": "f1040.pdf",
+  "description": "Form 1040 - U.S. Individual Income Tax Return",
+  "notes": "Field names verified by filling each field with its name and visually inspecting the PDF. Output paths verified against models.py dataclass field names.",
+  "fields": [
+    {
+      "pdf_field": "topmostSubform[0].Page1[0].f1_14[0]",
+      "output_path": "personal_info.first_name",
+      "source": "input",
+      "format": "text",
+      "form_line": "Your first name and middle initial"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page1[0].f1_15[0]",
+      "output_path": "personal_info.last_name",
+      "source": "input",
+      "format": "text",
+      "form_line": "Your last name"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page1[0].f1_16[0]",
+      "output_path": "personal_info.ssn",
+      "source": "input",
+      "format": "ssn",
+      "form_line": "Your social security number"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page1[0].f1_17[0]",
+      "output_path": "spouse_info.first_name",
+      "source": "input",
+      "format": "text",
+      "form_line": "Spouse first name"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page1[0].f1_18[0]",
+      "output_path": "spouse_info.last_name",
+      "source": "input",
+      "format": "text",
+      "form_line": "Spouse last name"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page1[0].f1_19[0]",
+      "output_path": "spouse_info.ssn",
+      "source": "input",
+      "format": "ssn",
+      "form_line": "Spouse SSN"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page1[0].Address_ReadOrder[0].f1_20[0]",
+      "output_path": "address.street",
+      "source": "input",
+      "format": "text",
+      "form_line": "Home address"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page1[0].Address_ReadOrder[0].f1_22[0]",
+      "output_path": "address.city",
+      "source": "input",
+      "format": "text",
+      "form_line": "City, town, or post office"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page1[0].Address_ReadOrder[0].f1_23[0]",
+      "output_path": "address.state",
+      "source": "input",
+      "format": "text",
+      "form_line": "State"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page1[0].Address_ReadOrder[0].f1_24[0]",
+      "output_path": "address.zip_code",
+      "source": "input",
+      "format": "text",
+      "form_line": "ZIP code"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page1[0].Checkbox_ReadOrder[0].c1_8[0]",
+      "output_path": "filing_status",
+      "source": "input",
+      "format": "filing_status_single",
+      "form_line": "Filing Status - Single"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page1[0].Checkbox_ReadOrder[0].c1_8[1]",
+      "output_path": "filing_status",
+      "source": "input",
+      "format": "filing_status_mfj",
+      "form_line": "Filing Status - MFJ"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page1[0].Checkbox_ReadOrder[0].c1_8[2]",
+      "output_path": "filing_status",
+      "source": "input",
+      "format": "filing_status_mfs",
+      "form_line": "Filing Status - MFS"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page1[0].c1_8[0]",
+      "output_path": "filing_status",
+      "source": "input",
+      "format": "filing_status_hoh",
+      "form_line": "Filing Status - HOH"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page1[0].c1_8[1]",
+      "output_path": "filing_status",
+      "source": "input",
+      "format": "filing_status_qss",
+      "form_line": "Filing Status - QSS"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page1[0].f1_47[0]",
+      "output_path": "income.total_wages",
+      "source": "output",
+      "format": "currency",
+      "form_line": "Line 1a - Wages, salaries, tips (W-2 box 1)"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page1[0].f1_57[0]",
+      "output_path": "income.total_wages",
+      "source": "output",
+      "format": "currency",
+      "form_line": "Line 1z - Add lines 1a through 1h"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page1[0].f1_58[0]",
+      "output_path": "income.tax_exempt_interest",
+      "source": "output",
+      "format": "currency",
+      "form_line": "Line 2a - Tax-exempt interest"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page1[0].f1_59[0]",
+      "output_path": "income.total_interest",
+      "source": "output",
+      "format": "currency",
+      "form_line": "Line 2b - Taxable interest"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page1[0].f1_60[0]",
+      "output_path": "income.total_qualified_dividends",
+      "source": "output",
+      "format": "currency",
+      "form_line": "Line 3a - Qualified dividends"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page1[0].f1_61[0]",
+      "output_path": "income.total_ordinary_dividends",
+      "source": "output",
+      "format": "currency",
+      "form_line": "Line 3b - Ordinary dividends"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page1[0].f1_62[0]",
+      "output_path": "income.total_retirement_distributions",
+      "source": "output",
+      "format": "currency",
+      "form_line": "Line 4a - IRA distributions"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page1[0].f1_63[0]",
+      "output_path": "income.taxable_retirement_distributions",
+      "source": "output",
+      "format": "currency",
+      "form_line": "Line 4b - Taxable amount"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page1[0].f1_65[0]",
+      "output_path": "income.annuity_taxable_amount",
+      "source": "output",
+      "format": "currency",
+      "form_line": "Line 5a - Pensions and annuities"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page1[0].f1_68[0]",
+      "output_path": "income.total_social_security",
+      "source": "output",
+      "format": "currency",
+      "form_line": "Line 6a - Social security benefits"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page1[0].f1_69[0]",
+      "output_path": "income.taxable_social_security",
+      "source": "output",
+      "format": "currency",
+      "form_line": "Line 6b - Taxable SS"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page1[0].f1_70[0]",
+      "output_path": "income.net_capital_gain_loss",
+      "source": "output",
+      "format": "currency",
+      "form_line": "Line 7a - Capital gain or (loss)"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page1[0].f1_73[0]",
+      "output_path": "income.gross_income",
+      "source": "output",
+      "format": "currency",
+      "form_line": "Line 9 - Total income"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page1[0].f1_74[0]",
+      "output_path": "agi.total_adjustments",
+      "source": "output",
+      "format": "currency",
+      "form_line": "Line 10 - Adjustments to income from Schedule 1"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page1[0].f1_75[0]",
+      "output_path": "agi.agi",
+      "source": "output",
+      "format": "currency",
+      "form_line": "Line 11a - Adjusted gross income"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page2[0].f2_01[0]",
+      "output_path": "agi.agi",
+      "source": "output",
+      "format": "currency",
+      "form_line": "Line 11b - Amount from line 11a (AGI)"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page2[0].f2_02[0]",
+      "output_path": "deductions.deduction_amount",
+      "source": "output",
+      "format": "currency",
+      "form_line": "Line 12e - Standard deduction or itemized deductions"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page2[0].f2_03[0]",
+      "output_path": "deductions.qbi_deduction",
+      "source": "output",
+      "format": "currency",
+      "form_line": "Line 13a - Qualified business income deduction"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page2[0].f2_06[0]",
+      "output_path": "deductions.taxable_income",
+      "source": "output",
+      "format": "currency",
+      "form_line": "Line 15 - Taxable income"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page2[0].f2_08[0]",
+      "output_path": "tax.total_income_tax",
+      "source": "output",
+      "format": "currency",
+      "form_line": "Line 16 - Tax"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page2[0].f2_10[0]",
+      "output_path": "tax.total_tax_before_credits",
+      "source": "output",
+      "format": "currency",
+      "form_line": "Line 18 - Add lines 16 and 17"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page2[0].f2_11[0]",
+      "output_path": "credits.child_tax_credit_nonrefundable",
+      "source": "output",
+      "format": "currency",
+      "form_line": "Line 19 - Child tax credit or credit for other dependents"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page2[0].f2_13[0]",
+      "output_path": "credits.total_nonrefundable_credits",
+      "source": "output",
+      "format": "currency",
+      "form_line": "Line 21 - Add lines 19 and 20"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page2[0].f2_15[0]",
+      "output_path": "se_tax.total_se_tax",
+      "source": "output",
+      "format": "currency",
+      "form_line": "Line 23 - Other taxes, including SE tax, from Schedule 2"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page2[0].f2_16[0]",
+      "output_path": "total_tax",
+      "source": "output",
+      "format": "currency",
+      "form_line": "Line 24 - Total tax"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page2[0].f2_20[0]",
+      "output_path": "payments.federal_income_tax_withheld",
+      "source": "output",
+      "format": "currency",
+      "form_line": "Line 25d - Federal income tax withheld"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page2[0].f2_21[0]",
+      "output_path": "payments.estimated_tax_payments",
+      "source": "output",
+      "format": "currency",
+      "form_line": "Line 26 - Estimated tax payments"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page2[0].f2_23[0]",
+      "output_path": "credits.earned_income_credit",
+      "source": "output",
+      "format": "currency",
+      "form_line": "Line 27a - Earned income credit (EIC)"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page2[0].f2_24[0]",
+      "output_path": "credits.additional_child_tax_credit",
+      "source": "output",
+      "format": "currency",
+      "form_line": "Line 28 - Additional child tax credit"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page2[0].f2_25[0]",
+      "output_path": "credits.aotc_refundable",
+      "source": "output",
+      "format": "currency",
+      "form_line": "Line 29 - American opportunity credit"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page2[0].f2_28[0]",
+      "output_path": "credits.total_refundable_credits",
+      "source": "output",
+      "format": "currency",
+      "form_line": "Line 32 - Total other payments and refundable credits"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page2[0].f2_29[0]",
+      "output_path": "total_payments",
+      "source": "output",
+      "format": "currency",
+      "form_line": "Line 33 - Total payments"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page2[0].f2_30[0]",
+      "output_path": "overpayment",
+      "source": "output",
+      "format": "currency",
+      "form_line": "Line 34 - Overpayment"
+    },
+    {
+      "pdf_field": "topmostSubform[0].Page2[0].f2_35[0]",
+      "output_path": "amount_owed",
+      "source": "output",
+      "format": "currency",
+      "form_line": "Line 37 - Amount you owe"
+    }
+  ]
+}

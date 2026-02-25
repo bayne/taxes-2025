@@ -4,14 +4,15 @@ Guidelines for AI coding agents working on the taxes-bot codebase.
 
 ## Project Overview
 
-Federal individual income tax calculator for tax year 2025. The system has four layers:
+Federal individual income tax calculator for tax year 2025. The system has five layers:
 
-- **CLI** (`main.py`) — JSON in, JSON out via stdin or file argument
+- **CLI** (`main.py`) — JSON in, JSON out via stdin or file argument. Supports `--pdf <dir>` to fill IRS forms.
 - **Web UI** (`server.py` + `static/`) — Preact single-page app with a multi-step wizard
-- **BDD tests** (`tests/features/` + `tests/step_defs/`) — pytest-bdd Gherkin scenarios
+- **PDF filling** (`pdf_filler.py` + `forms/`) — Fills official IRS fillable PDFs from calculator output
+- **BDD tests** (`tests/features/` + `tests/step_defs/`) — pytest-bdd Gherkin scenarios, each producing filled PDF artifacts
 - **Playwright e2e tests** (`tests/e2e/`) — Browser tests with video recording
 
-Zero external runtime dependencies. Python 3.14+, stdlib only. Dev dependencies are pytest, pytest-bdd, and pytest-playwright.
+Zero external runtime dependencies. Python 3.14+, stdlib only. Dev dependencies are pytest, pytest-bdd, and pytest-playwright. Optional `pdf` dependency group adds `pypdf>=4.0` for PDF filling.
 
 ## Architecture
 
@@ -21,8 +22,9 @@ Zero external runtime dependencies. Python 3.14+, stdlib only. Dev dependencies 
 |------|-------|---------|
 | `models.py` | ~4000 | Dataclass-based input/output models. `TaxReturnInput` and `TaxReturnOutput` with all sub-models. Enums for filing status, account types, etc. All monetary amounts are `float` in USD. |
 | `calculator.py` | ~2400 | Tax computation engine. Takes `TaxReturnInput`, returns `TaxReturnOutput`. References IRC sections in comments. Has `_deserialize_enum()` for JSON-to-dataclass conversion. |
-| `main.py` | ~48 | CLI entry point. Reads JSON from file or stdin, prints result JSON. Also supports `--schema input` and `--schema output`. |
-| `server.py` | ~106 | Stdlib `http.server` HTTP server. `GET /` serves static files. `POST /api/calculate` runs the calculator. `GET /api/schema` returns JSON Schema. No dependencies. |
+| `main.py` | ~84 | CLI entry point. Reads JSON from file or stdin, prints result JSON. Supports `--schema input`, `--schema output`, and `--pdf <dir>` to fill IRS forms. |
+| `server.py` | ~167 | Stdlib `http.server` HTTP server. `GET /` serves static files. `POST /api/calculate` runs the calculator. `GET /api/schema` returns JSON Schema. `POST /api/pdf` returns a ZIP of filled IRS PDFs. |
+| `pdf_filler.py` | ~393 | Fills IRS PDF forms from calculator input/output. Lazy-imports pypdf. Resolves dot-path references into nested dicts, formats values for IRS conventions. Can fill individual forms or full returns (to disk or in-memory ZIP). |
 
 ### Web UI
 
@@ -38,15 +40,51 @@ Key concepts in `app.js`:
 - `incomeTypes` flags control which income entry steps are shown
 - State is saved to `localStorage` under key `tax-wizard-state`
 
+### PDF Filling Infrastructure
+
+| Path | Purpose |
+|------|---------|
+| `pdf_filler.py` | Core module. `fill_form()` fills one PDF, `fill_return()` fills all applicable forms to disk, `fill_return_zip()` returns ZIP bytes. `determine_required_forms()` auto-detects which of the 13 supported forms are needed. |
+| `forms/download_forms.py` | Stdlib-only script. Downloads 13 IRS fillable PDFs from `irs.gov/pub/irs-pdf/` into `forms/blanks/`. |
+| `forms/field_discovery.py` | Uses pypdf to extract AcroForm field names/types from each PDF. Run with `--form f1040` or `--all`. Output is used to build mapping files. |
+| `forms/blanks/` | Downloaded IRS PDFs (gitignored). Populated by `download_forms.py`. |
+| `forms/mappings/*.json` | JSON files mapping PDF field names to `TaxReturnInput`/`TaxReturnOutput` data paths. One file per form. Currently only `f1040.json` exists. |
+
+The 13 supported IRS forms are: Form 1040, Schedules 1-3, Schedules A-F, Schedule SE, Form 8949, and Form 2441. Each maps to a `form_id` like `f1040`, `f1040s1`, `f1040sa`, `f1040sc`, `f1040sd`, `f1040sse`, `f8949`, `f2441`.
+
+**Mapping file format** (`forms/mappings/<form_id>.json`):
+```json
+{
+  "form_id": "f1040",
+  "tax_year": 2025,
+  "pdf_file": "f1040.pdf",
+  "fields": [
+    {
+      "pdf_field": "topmostSubform[0].Page1[0].f1_47[0]",
+      "output_path": "income.total_wages",
+      "source": "output",
+      "format": "currency",
+      "form_line": "Line 1a - Wages"
+    }
+  ]
+}
+```
+
+- `source`: `"input"` resolves path against `TaxReturnInput`, `"output"` against `TaxReturnOutput`
+- `format`: `"text"`, `"currency"` (whole dollars), `"ssn"` (XXX-XX-XXXX), `"checkbox"`, or `"filing_status_*"`
+- `output_path`: Dot-separated path into the nested dict (e.g., `income.total_wages`, `personal_info.first_name`)
+
 ### Tests
 
 | Path | Purpose |
 |------|---------|
-| `tests/conftest.py` (~1900 lines) | BDD test fixtures and all shared step implementations (`@given`, `@when`, `@then`) |
-| `tests/features/` (15 files) | Gherkin `.feature` files, one per tax scenario category |
-| `tests/step_defs/` (15 files) | Thin `@scenario(...)` wrappers that bind feature files to pytest |
+| `tests/conftest.py` (~1977 lines) | BDD test fixtures, all shared step implementations (`@given`, `@when`, `@then`), and PDF artifact generation |
+| `tests/features/` (16 files) | Gherkin `.feature` files, one per tax scenario category |
+| `tests/step_defs/` (16 files) | Thin `@scenario(...)` wrappers that bind feature files to pytest |
+| `tests/test_pdf_filler.py` (~407 lines) | Unit tests for `_resolve_path`, `_format_value`, `determine_required_forms`; mapping file validation; integration tests that fill real PDFs |
 | `tests/test_schema.py` | Validates JSON Schema generation |
 | `tests/test_schema_references.py` | Validates schema cross-references |
+| `tests/artifacts/` | Filled PDF artifacts generated by BDD tests (gitignored). One subdirectory per scenario. |
 | `tests/e2e/conftest.py` (~436 lines) | Server fixture, `Wizard` helper class, `run_scenario()`, assertion helpers |
 | `tests/e2e/test_wizard_flow.py` (9 tests) | Full wizard navigation tests — step-by-step form filling |
 | `tests/e2e/test_*.py` (15 files, 59 tests) | State-injection tests — one file per feature/scenario group |
@@ -131,13 +169,16 @@ def test_single_w2_standard():
     pass
 ```
 
-All `@given`, `@when`, and `@then` step implementations live in `tests/conftest.py`. The `TaxScenarioContext` dataclass accumulates inputs across steps, then `@when("the tax return is calculated")` builds `TaxReturnInput` and calls `calculate()`.
+All `@given`, `@when`, and `@then` step implementations live in `tests/conftest.py`. The `TaxScenarioContext` dataclass accumulates inputs across steps, then `@when("the tax return is calculated")` builds `TaxReturnInput`, calls `calculate()`, and automatically generates filled PDF artifacts into `tests/artifacts/<test_name>/`. PDF generation is silently skipped if pypdf or blank PDFs are unavailable.
 
 ## Running Tests
 
 ```bash
 # BDD tests (unit/integration — no browser needed)
 uv run pytest tests/ -k "not e2e"
+
+# PDF filler tests (unit + integration)
+uv run --group pdf pytest tests/test_pdf_filler.py -v
 
 # E2E tests (starts server automatically, records video)
 uv run pytest tests/e2e/ -v
@@ -146,6 +187,17 @@ uv run pytest tests/e2e/ -v
 uv run pytest tests/e2e/test_wizard_flow.py -v
 
 # Videos saved to test-results/videos/
+# Filled PDFs saved to tests/artifacts/<test_name>/
+
+# Download IRS blank PDFs (needed for PDF filling/integration tests)
+uv run python forms/download_forms.py
+
+# Install pypdf for PDF features
+uv sync --group pdf
+
+# Discover PDF field names (for building mapping files)
+uv run --group pdf python forms/field_discovery.py --form f1040
+uv run --group pdf python forms/field_discovery.py --all --json
 ```
 
 All commands use `uv run` to ensure the correct virtual environment. The e2e server fixture is session-scoped — it starts once on port 8765 for all tests.
@@ -167,6 +219,13 @@ All commands use `uv run` to ensure the correct virtual environment. The e2e ser
    - Add a full wizard flow test in `tests/e2e/test_wizard_flow.py`
 
 6. **No UI support** — Use the state-injection pattern. The `payload` dict sent to `run_scenario()` goes directly to the server via route interception, bypassing `buildPayload()`. This is how features like AMT preferences, K-1 income, and carryforwards are tested.
+
+7. **PDF form mapping** (if applicable):
+   - Download the blank PDF: `uv run python forms/download_forms.py --form <form_id>`
+   - Discover field names: `uv run --group pdf python forms/field_discovery.py --form <form_id> --json`
+   - Create `forms/mappings/<form_id>.json` mapping PDF fields to output paths (see existing `f1040.json` for format)
+   - The BDD tests will automatically include the new form in PDF artifacts once the mapping exists
+   - `determine_required_forms()` in `pdf_filler.py` may need updating if the form's trigger conditions aren't already covered
 
 ## Common Pitfalls
 
@@ -192,3 +251,13 @@ All commands use `uv run` to ensure the correct virtual environment. The e2e ser
 - **Enum string values**: All enums use lowercase snake_case string values (e.g., `"single"`, `"married_filing_jointly"`, `"short_term"`). The wizard state, API payloads, and calculator all use these string representations.
 
 - **Float tolerance in assertions**: `assert_json_field` uses a default tolerance of 1.0 for numeric comparisons. Use the `gt`, `lt`, `gte`, `eq`, and `expected` keyword arguments for different comparison modes.
+
+- **PDF field names vary by tax year**: IRS PDF field names (e.g., `topmostSubform[0].Page1[0].f1_47[0]`) change between tax years. Always run `field_discovery.py` on the actual PDF to verify field names before building mappings. Don't guess field names.
+
+- **Enum conversion for PDF filler**: The pdf_filler works with plain dicts (from `asdict()`), not dataclasses. Enum values must be converted to strings first using `_enum_to_str()` (defined in both `main.py` and `tests/conftest.py`). The filler matches filing status as uppercase name strings (e.g., `"SINGLE"`, `"MARRIED_FILING_JOINTLY"`).
+
+- **pypdf is optional**: The `pdf` dependency group is opt-in. Code that imports from `pdf_filler` should handle `ImportError` gracefully, or guard with `try/except` as `server.py` does. BDD tests skip PDF generation silently if pypdf is missing.
+
+- **Blank PDFs are gitignored**: `forms/blanks/*.pdf` is in `.gitignore`. After cloning, run `forms/download_forms.py` before running PDF integration tests. The download script uses stdlib only (no pypdf needed).
+
+- **Only mapped forms are filled**: `determine_required_forms()` detects all applicable forms but filters to those with a mapping file in `forms/mappings/`. Currently only Form 1040 has a mapping. Adding a new `<form_id>.json` mapping file immediately enables that form in all PDF output.

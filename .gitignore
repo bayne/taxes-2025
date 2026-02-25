@@ -8,3 +8,10 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Downloaded IRS PDF forms
+forms/blanks/*.pdf
+
+# Filled PDF output
+filled_forms/
+tests/artifacts/

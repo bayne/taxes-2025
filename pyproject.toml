@@ -12,6 +12,7 @@ dev = [
     "pytest-bdd>=8.1",
     "pytest-playwright>=0.7.2",
 ]
+pdf = ["pypdf>=4.0"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

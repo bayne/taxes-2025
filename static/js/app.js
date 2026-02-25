@@ -25,6 +25,14 @@ const fmt = (n) => {
 
 const US_STATES = ['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','DC'];
 
+const FORM_NAMES = {
+  f1040: 'Form 1040', f1040s1: 'Schedule 1', f1040s2: 'Schedule 2',
+  f1040s3: 'Schedule 3', f1040sa: 'Schedule A', f1040sb: 'Schedule B',
+  f1040sc: 'Schedule C', f1040sd: 'Schedule D', f1040se: 'Schedule E',
+  f1040sf: 'Schedule F', f1040sse: 'Schedule SE', f8949: 'Form 8949',
+  f2441: 'Form 2441',
+};
+
 // ─── Default State ────────────────────────────────────────────────────────────
 
 function defaultState() {
@@ -1137,9 +1145,63 @@ function ResultsDisplay({ results }) {
   `;
 }
 
+// Forms that currently have a mapping file on the server
+const MAPPED_FORMS = new Set([
+  'f1040','f1040s1','f1040s2','f1040s3','f1040sa','f1040sb',
+  'f1040sc','f1040sd','f1040se','f1040sf','f1040sse','f8949','f2441',
+]);
+
+function applicableFormIds(output) {
+  const income = output.income || {};
+  const agi    = output.agi || {};
+  const ded    = output.deductions || {};
+  const tax    = output.tax || {};
+  const cr     = output.credits || {};
+  const se     = output.se_tax || {};
+
+  const forms = ['f1040'];
+
+  const anyNonZero = (...vals) => vals.some(v => v && v !== 0);
+
+  if (anyNonZero(income.total_business_income, income.total_rental_income,
+                 income.unemployment_compensation, income.alimony_income,
+                 income.total_farm_income, income.total_royalty_income,
+                 income.total_k1_ordinary_income, income.taxable_home_sale_gain,
+                 agi.educator_expenses_deduction, agi.ira_deduction,
+                 agi.student_loan_interest_deduction, agi.hsa_deduction,
+                 agi.se_tax_deduction, agi.alimony_deduction))
+    forms.push('f1040s1');
+
+  if (anyNonZero(tax.amt, tax.niit_amount, tax.additional_medicare_tax, se.total_se_tax))
+    forms.push('f1040s2');
+
+  if (anyNonZero(cr.education_credits, cr.foreign_tax_credit,
+                 cr.child_dependent_care_credit, cr.savers_credit,
+                 cr.energy_home_improvement_credit, cr.residential_clean_energy_credit,
+                 cr.elderly_disabled_credit))
+    forms.push('f1040s3');
+
+  if (ded.deduction_method_used === 'ITEMIZED')  forms.push('f1040sa');
+  if (anyNonZero(income.total_business_income))  forms.push('f1040sc');
+  if (anyNonZero(income.net_capital_gain_loss))  { forms.push('f1040sd'); forms.push('f8949'); }
+  if (anyNonZero(income.total_rental_income, income.total_k1_ordinary_income,
+                 income.total_royalty_income))    forms.push('f1040se');
+  if (anyNonZero(income.total_farm_income))       forms.push('f1040sf');
+  if (anyNonZero(se.total_se_tax))               forms.push('f1040sse');
+
+  return forms.filter(id => MAPPED_FORMS.has(id));
+}
+
 function StepReview({ state, update }) {
+  const [pdfDownloading, setPdfDownloading] = useState(false);
+  const [pdfError, setPdfError] = useState(null);
+  const [pdfFormIds, setPdfFormIds] = useState(null);
+  const [pdfOpeningFormId, setPdfOpeningFormId] = useState(null);
+
   const doCalculate = async () => {
     update({ calculating: true, errors: null, results: null });
+    setPdfError(null);
+    setPdfFormIds(null);
     try {
       const payload = buildPayload(state);
       const resp = await fetch('/api/calculate', {
@@ -1152,9 +1214,74 @@ function StepReview({ state, update }) {
         update({ calculating: false, errors: data.errors || [data.error || 'Calculation failed'] });
       } else {
         update({ calculating: false, results: data });
+        setPdfFormIds(applicableFormIds(data));
       }
     } catch (err) {
       update({ calculating: false, errors: [err.message] });
+    }
+  };
+
+  const doDownloadPDF = async () => {
+    setPdfDownloading(true);
+    setPdfError(null);
+    try {
+      const payload = buildPayload(state);
+      const resp = await fetch('/api/pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!resp.ok) {
+        const data = await resp.json();
+        setPdfError((data.errors || ['PDF generation failed']).join('; '));
+      } else {
+        const formIdsHeader = resp.headers.get('X-Form-Ids');
+        if (formIdsHeader) setPdfFormIds(formIdsHeader.split(',').filter(id => MAPPED_FORMS.has(id)));
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'tax_return_forms.zip';
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    } catch (err) {
+      setPdfError(err.message);
+    } finally {
+      setPdfDownloading(false);
+    }
+  };
+
+  const openFormInTab = async (formId) => {
+    // Open the window synchronously (before any awaits) to avoid popup blockers
+    const win = window.open('', '_blank');
+    if (!win) {
+      setPdfError('Popup blocked — please allow popups for this site and try again.');
+      return;
+    }
+    setPdfOpeningFormId(formId);
+    setPdfError(null);
+    try {
+      const payload = { ...buildPayload(state), _form_id: formId };
+      const resp = await fetch('/api/pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!resp.ok) {
+        win.close();
+        const data = await resp.json();
+        setPdfError((data.errors || ['PDF generation failed']).join('; '));
+      } else {
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        win.location.href = url;
+      }
+    } catch (err) {
+      win.close();
+      setPdfError(err.message);
+    } finally {
+      setPdfOpeningFormId(null);
     }
   };
 
@@ -1181,6 +1308,39 @@ function StepReview({ state, update }) {
       ${state.results ? html`
         <hr class="section-divider" />
         <${ResultsDisplay} results=${state.results} />
+
+        <div style="text-align:center;margin-top:24px">
+          <button class="btn btn-primary" onClick=${doDownloadPDF} disabled=${pdfDownloading}
+            style="padding:12px 36px;font-size:1rem">
+            ${pdfDownloading
+              ? html`<span class="spinner" /> Generating PDFs...`
+              : '⬇ Download Filled IRS Forms (ZIP)'}
+          </button>
+
+          ${pdfFormIds && pdfFormIds.length > 0 ? html`
+            <div style="margin-top:14px">
+              <div style="font-size:0.8rem;color:#666;margin-bottom:6px">Open individual forms in a new tab:</div>
+              <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:6px">
+                ${pdfFormIds.map(id => html`
+                  <button key=${id} class="btn btn-secondary"
+                    onClick=${() => openFormInTab(id)}
+                    disabled=${pdfOpeningFormId === id}
+                    style="font-size:0.85rem;padding:6px 14px">
+                    ${pdfOpeningFormId === id
+                      ? html`<span class="spinner" />`
+                      : html`${FORM_NAMES[id] || id} ↗`}
+                  </button>
+                `)}
+              </div>
+            </div>
+          ` : ''}
+
+          ${pdfError ? html`
+            <div class="alert alert-error" style="margin-top:10px;text-align:left">
+              ${pdfError}
+            </div>
+          ` : ''}
+        </div>
       ` : ''}
     </div>
   `;
