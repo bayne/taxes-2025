@@ -16,6 +16,7 @@ served by a stdlib HTTP server.
 - [Tech Stack](#tech-stack)
 - [CLI Usage](#cli-usage)
 - [Web UI](#web-ui)
+- [Docker](#docker)
 - [Testing](#testing)
 - [Test Recordings](#test-recordings)
 - [Project Structure](#project-structure)
@@ -48,32 +49,42 @@ uv run pytest tests/e2e/ -v           # Playwright e2e tests
 
 ## Architecture
 
-```
-┌──────────────────────────────────────────────────────────┐
-│                        Clients                           │
-│  ┌─────────────┐   ┌──────────────────────────────────┐  │
-│  │   CLI        │   │   Web UI (Preact SPA)            │  │
-│  │   main.py    │   │   static/index.html + js/app.js  │  │
-│  └──────┬──────┘   └──────────────┬───────────────────┘  │
-│         │ stdin/file               │ POST /api/calculate  │
-│         │                          │                      │
-│  ┌──────▼──────────────────────────▼───────────────────┐  │
-│  │              server.py (stdlib HTTP)                 │  │
-│  │              Stateless — no sessions, no DB          │  │
-│  └──────────────────────┬──────────────────────────────┘  │
-│                         │                                 │
-│  ┌──────────────────────▼──────────────────────────────┐  │
-│  │              calculator.py                           │  │
-│  │  Tax computation engine — brackets, credits, AMT,   │  │
-│  │  SE tax, NIIT, surtaxes, carryforwards, etc.        │  │
-│  └──────────────────────┬──────────────────────────────┘  │
-│                         │                                 │
-│  ┌──────────────────────▼──────────────────────────────┐  │
-│  │              models.py                               │  │
-│  │  Python dataclasses — TaxReturnInput, TaxReturnOutput│  │
-│  │  JSON Schema generation (no external libs)           │  │
-│  └─────────────────────────────────────────────────────┘  │
-└──────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Clients
+        CLI["CLI\nmain.py"]
+        WebUI["Web UI — Preact SPA\nstatic/index.html + js/app.js"]
+    end
+
+    subgraph ServerLayer["HTTP Server — server.py (stdlib, stateless)"]
+        direction LR
+        API_CALC["POST /api/calculate"]
+        API_PDF["POST /api/pdf"]
+        API_SCHEMA["GET /api/schema"]
+        STATIC["GET / (static files)"]
+    end
+
+    subgraph Core
+        Calculator["Tax Engine\ncalculator.py\nbrackets · credits · AMT · SE tax · NIIT · carryforwards"]
+        Models["Data Models\nmodels.py\nTaxReturnInput / TaxReturnOutput"]
+        PDFFiller["PDF Filler\npdf_filler.py\nfills IRS AcroForm PDFs"]
+    end
+
+    subgraph Forms["IRS Forms"]
+        Blanks["Blank PDFs\nforms/blanks/"]
+        Mappings["Field Mappings\nforms/mappings/*.json"]
+    end
+
+    CLI -- "stdin / file JSON" --> Calculator
+    CLI -- "--pdf flag" --> PDFFiller
+    WebUI -- "POST /api/calculate" --> API_CALC
+    WebUI -- "POST /api/pdf" --> API_PDF
+    API_CALC --> Calculator
+    API_PDF --> PDFFiller
+    Calculator --> Models
+    PDFFiller --> Models
+    PDFFiller --> Blanks
+    PDFFiller --> Mappings
 ```
 
 **Data flow:**
@@ -82,6 +93,7 @@ uv run pytest tests/e2e/ -v           # Playwright e2e tests
 2. Input is deserialized into a `TaxReturnInput` dataclass.
 3. `calculator.calculate()` validates and computes the full return.
 4. A `TaxReturnOutput` dataclass is returned (or serialized to JSON).
+5. Optionally, `pdf_filler.py` maps output fields onto official IRS AcroForm PDFs.
 
 The web UI is a multi-step wizard with branching logic. All state lives
 in the browser (`localStorage`). The server is fully stateless — it
@@ -91,14 +103,16 @@ receives a complete input payload, computes the result, and returns it.
 
 ## Tech Stack
 
-| Layer     | Technology                              | Dependencies          |
-|-----------|-----------------------------------------|-----------------------|
-| Runtime   | Python 3.14                             | **None** (stdlib only)|
-| Frontend  | Preact + HTM via CDN                    | No build step         |
-| Server    | `http.server` (stdlib)                  | No framework          |
-| BDD tests | pytest + pytest-bdd                     | Dev only              |
-| E2E tests | Playwright (pytest-playwright)          | Dev only              |
-| Tooling   | uv (package/project manager)            | —                     |
+| Layer       | Technology                              | Dependencies              |
+|-------------|-----------------------------------------|---------------------------|
+| Runtime     | Python 3.14                             | **None** (stdlib only)    |
+| Frontend    | Preact + HTM via CDN                    | No build step             |
+| Server      | `http.server` (stdlib)                  | No framework              |
+| PDF filling | `pdf_filler.py` + pypdf                 | Optional (`--group pdf`)  |
+| BDD tests   | pytest + pytest-bdd                     | Dev only                  |
+| E2E tests   | Playwright (pytest-playwright)          | Dev only                  |
+| Container   | Docker (python:3.14-slim)               | —                         |
+| Tooling     | uv (package/project manager)            | —                         |
 
 ---
 
@@ -111,12 +125,21 @@ uv run python main.py input.json
 # Compute from stdin
 echo '{ ... }' | uv run python main.py
 
+# Fill IRS PDFs from a JSON file (outputs to ./output/)
+uv run python main.py --pdf ./output input.json
+
 # Print input JSON schema
 uv run python main.py --schema input
 
 # Print output JSON schema
 uv run python main.py --schema output
 ```
+
+> **PDF filling** requires blank IRS PDFs in `forms/blanks/` and the optional `pdf` dependency group:
+> ```bash
+> uv run python forms/download_forms.py   # download blank PDFs from irs.gov
+> uv sync --group pdf                     # install pypdf
+> ```
 
 ---
 
@@ -149,6 +172,32 @@ Content-Type: application/json
 → 200 { ...TaxReturnOutput JSON... }
 → 400 { "error": "..." }
 ```
+
+The server also exposes:
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/` | `GET` | Serves the Preact SPA |
+| `/api/calculate` | `POST` | Runs the tax calculator |
+| `/api/pdf` | `POST` | Returns a ZIP of filled IRS PDFs |
+| `/api/schema` | `GET` | Returns the `TaxReturnInput` JSON Schema |
+
+---
+
+## Docker
+
+```bash
+# Build the image
+docker build -t taxes-bot .
+
+# Run the web UI on port 8000
+docker run -p 8000:8000 taxes-bot
+
+# Open http://localhost:8000
+```
+
+The Docker image bundles only the runtime files (`models.py`, `calculator.py`,
+`server.py`, `static/`). No dev tooling, tests, or PDF dependencies are included.
 
 ---
 
@@ -345,14 +394,22 @@ each form field and advancing through each page.
 
 ```
 taxes-bot/
-├── main.py                  # CLI entry point
-├── server.py                # Stdlib HTTP server (web UI backend)
+├── main.py                  # CLI entry point (--pdf, --schema)
+├── server.py                # Stdlib HTTP server (web UI + API)
 ├── calculator.py            # Tax computation engine
 ├── models.py                # Dataclass models + JSON schema generation
+├── pdf_filler.py            # IRS AcroForm PDF filler (requires pypdf)
+├── Dockerfile               # Minimal runtime image (python:3.14-slim)
 ├── static/
 │   ├── index.html           # Web UI shell
 │   └── js/
 │       └── app.js           # Preact SPA wizard
+├── forms/
+│   ├── download_forms.py    # Downloads IRS blank PDFs from irs.gov
+│   ├── field_discovery.py   # Extracts AcroForm field names from PDFs
+│   ├── blanks/              # Downloaded IRS PDFs (gitignored)
+│   └── mappings/
+│       └── f1040.json       # PDF field → output path mapping
 ├── tests/
 │   ├── conftest.py          # Shared BDD fixtures
 │   ├── test_schema.py       # JSON schema validation tests
