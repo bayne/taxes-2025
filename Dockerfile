@@ -8,4 +8,6 @@ COPY static/ static/
 
 EXPOSE 8000
 
+ENV PYTHONUNBUFFERED=1
+
 CMD ["python", "server.py", "8000"]
