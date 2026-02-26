@@ -4,7 +4,7 @@ __pycache__/
 .github/
 test-results/
 *.md
-*.json
+title-26.json
 *.xml
 *.htm
 .python-version
@@ -12,3 +12,4 @@ test-results/
 .dockerignore
 Dockerfile
 tasks.md
+.venv/
